@@ -285,7 +285,7 @@ const FURN_SPR={crate:FURN.crate.spr,barrel:FURN.barrel.spr,table:FURN.table.spr
 const r2=v=>Math.round(v*100)/100,r3=v=>Math.round(v*1000)/1000;
 
 // 서버 주소: 워커에서 열면 같은 주소, GitHub Pages 등에서는 DEFAULT_SERVER, ?server=로 덮어쓰기
-const DEFAULT_SERVER='';
+const DEFAULT_SERVER='https://baekbal.jamesworks0101.workers.dev';
 const QS=new URLSearchParams(location.search);
 const API=(()=>{
  if(QS.has('offline'))return null;
