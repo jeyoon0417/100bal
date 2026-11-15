@@ -1,0 +1,22 @@
+name = "baekbal"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# 게임 화면(index.html, sim.js)은 배포 워크플로가 public/ 으로 복사해요
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+# 무료 플랜은 SQLite 기반 Durable Object만 쓸 수 있어요
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room", "Lobby"]
