@@ -11,7 +11,8 @@ export default{
   const url=new URL(req.url);
   if(req.method==='OPTIONS')return new Response(null,{headers:CORS});
   if(url.pathname==='/api/assign'){
-   const r=await lobbyOf(env).fetch('https://lobby/assign');
+   const mode=Sim.MODES[url.searchParams.get('mode')]?url.searchParams.get('mode'):'ffa';
+   const r=await lobbyOf(env).fetch('https://lobby/assign?mode='+mode);
    return json(await r.json());
   }
   if(url.pathname==='/api/stats'){
@@ -20,7 +21,7 @@ export default{
   }
   if(url.pathname==='/api/ws'){
    const room=url.searchParams.get('room')||'';
-   if(!/^[a-z0-9]{1,16}$/.test(room))return new Response('bad room',{status:400});
+   if(!/^[a-z0-9]{1,20}$/.test(room))return new Response('bad room',{status:400});
    if(req.headers.get('Upgrade')!=='websocket')return new Response('websocket only',{status:426});
    return env.ROOM.get(env.ROOM.idFromName(room)).fetch(req);
   }
@@ -39,24 +40,28 @@ export class Lobby{
    const r=await req.json();
    if(!r.room)return new Response('no room',{status:400});
    if(r.humans<=0)this.rooms.delete(r.room);
-   else{const old=this.rooms.get(r.room);this.rooms.set(r.room,{h:r.humans,tl:r.timeLeft,at:now,pend:old?old.pend:0})}
+   else{const old=this.rooms.get(r.room);this.rooms.set(r.room,{mode:r.mode||'ffa',h:r.humans,tl:r.timeLeft,el:r.elapsed,ph:r.phase,at:now,pend:old?old.pend:0})}
    return new Response('ok');
   }
   if(url.pathname==='/assign'){
+   const mode=url.searchParams.get('mode')||'ffa';
    let best=null,bs=-1;
    for(const[id,r]of this.rooms){
     if(now-r.at>120000&&r.pend<=0){this.rooms.delete(id);continue}
+    if(r.mode!==mode)continue;
     const n=r.h+r.pend;
     if(n>=12||r.tl<20)continue;
+    // 배틀로얄은 시작한 지 25초가 지난 판에는 넣지 않아요 (대기 중인 판은 OK)
+    if(mode==='br'&&r.ph==='play'&&r.el>25)continue;
     if(n>bs){bs=n;best=id}
    }
-   if(!best){best='r'+Math.random().toString(36).slice(2,9).replace(/[^a-z0-9]/g,'');this.rooms.set(best,{h:0,tl:180,at:now,pend:0})}
+   if(!best){best=mode+Math.random().toString(36).slice(2,9).replace(/[^a-z0-9]/g,'');this.rooms.set(best,{mode,h:0,tl:180,el:0,ph:'play',at:now,pend:0})}
    const r=this.rooms.get(best);r.pend++;
    setTimeout(()=>{r.pend=Math.max(0,r.pend-1)},8000);
    return Response.json({room:best,players:r.h});
   }
   if(url.pathname==='/stats'){
-   return Response.json({rooms:[...this.rooms].map(([id,r])=>({id,humans:r.h,timeLeft:Math.round(r.tl)})),players:[...this.rooms.values()].reduce((s,r)=>s+r.h,0)});
+   return Response.json({rooms:[...this.rooms].map(([id,r])=>({id,mode:r.mode,humans:r.h,timeLeft:Math.round(r.tl)})),players:[...this.rooms.values()].reduce((s,r)=>s+r.h,0)});
   }
   return new Response('not found',{status:404});
  }
@@ -65,8 +70,8 @@ export class Lobby{
 // One game room. Runs the shared simulation while at least one player is connected.
 export class Room{
  constructor(state,env){this.state=state;this.env=env;this.game=null;this.timer=null;this.name=null}
- ensure(){
-  if(!this.game)this.game=new GameRoom(Sim,{report:r=>this.report(r)});
+ ensure(mode){
+  if(!this.game)this.game=new GameRoom(Sim,{report:r=>this.report(r)},mode);
   if(!this.timer){
    let last=Date.now();
    this.timer=setInterval(()=>{
@@ -82,7 +87,8 @@ export class Room{
   const nick=(url.searchParams.get('nick')||'').replace(/[<>&"'\\]/g,'').trim().slice(0,8)||'플레이어';
   const pair=new WebSocketPair(),client=pair[0],server=pair[1];
   server.accept();
-  this.ensure();
+  const mode=url.searchParams.get('mode');
+  this.ensure(Sim.MODES[mode]?mode:(this.name||'').replace(/[^a-z].*$/,''));
   const game=this.game;
   const cid=game.join({send:s=>server.send(s),close:(c,r)=>server.close(c,r)},nick);
   if(cid!==null){
@@ -95,7 +101,7 @@ export class Room{
  report(r){
   if(!this.name)return;
   try{
-   lobbyOf(this.env).fetch('https://lobby/report',{method:'POST',body:JSON.stringify({room:this.name,humans:r.humans,timeLeft:r.timeLeft})}).catch(()=>{});
+   lobbyOf(this.env).fetch('https://lobby/report',{method:'POST',body:JSON.stringify(Object.assign({room:this.name},r))}).catch(()=>{});
   }catch(e){}
  }
 }
