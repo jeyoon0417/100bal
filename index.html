@@ -291,9 +291,9 @@ const API=(()=>{
  if(QS.has('offline'))return null;
  const q=QS.get('server');if(q)return q.replace(/\/$/,'');
  if(!/^https?:$/.test(location.protocol))return null;
- if(/github\.io$/.test(location.hostname))return DEFAULT_SERVER||null;
  if(/claude|anthropic/.test(location.hostname))return null;
- return location.origin;
+ if(/workers\.dev$/.test(location.hostname))return location.origin;
+ return DEFAULT_SERVER||location.origin;
 })();
 
 // ---------- view state ----------
