@@ -9,7 +9,7 @@
 - `sim.js` — 게임 규칙/물리/봇 AI. 브라우저와 서버가 같이 씀
 - `server/` — Cloudflare Worker + Durable Objects
   - `src/worker.js` — 게임 파일 제공, `/api/assign`(방 배정), `/api/ws`(방 접속)
-  - `src/room-logic.js` — 방 하나: 12자리, 빈자리 봇, 3분 라운드
+  - `src/room-logic.js` — 방 하나: 12자리, 빈자리 봇, 6분 라운드
   - `wrangler.toml` — 배포 설정
 - `.github/workflows/deploy.yml` — main에 올리면 자동 배포
 

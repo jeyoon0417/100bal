@@ -1,7 +1,7 @@
 // 백발백중 — shared game simulation (browser + Cloudflare Worker)
 (function(root,factory){var S=factory();if(typeof module==='object'&&module.exports)module.exports=S;else root.Sim=S;})(typeof self!=='undefined'?self:globalThis,function(){
 'use strict';
-const WORLD=1100,MATCH=180,ORB_MIN=140,ORB_CAP=240,WT=7,SLOTS=12;
+const WORLD=1100,MATCH=360,ORB_MIN=140,ORB_CAP=240,WT=7,SLOTS=12;
 const rand=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t}return a};
@@ -9,11 +9,11 @@ const d2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
 const r1=v=>Math.round(v*10)/10;
 
 const MODES={
- ffa:{id:'ffa',name:'개인전',desc:'3분 동안 점수 1등',team:false,time:180},
- tdm:{id:'tdm',name:'팀 데스매치',desc:'6대6, 먼저 30킬',team:true,time:180,goal:30},
- koth:{id:'koth',name:'점령전',desc:'가운데 지점을 지켜 100점',team:true,time:180,goal:100},
- ctf:{id:'ctf',name:'깃발뺏기',desc:'상대 깃발을 3번 가져오기',team:true,time:240,goal:3},
- br:{id:'br',name:'배틀로얄',desc:'목숨 1개, 마지막 1명',team:false,time:200},
+ ffa:{id:'ffa',name:'개인전',desc:'6분 동안 점수 1등',team:false,time:360},
+ tdm:{id:'tdm',name:'팀 데스매치',desc:'6대6, 먼저 50킬',team:true,time:360,goal:50},
+ koth:{id:'koth',name:'점령전',desc:'가운데 지점을 지켜 180점',team:true,time:360,goal:180},
+ ctf:{id:'ctf',name:'깃발뺏기',desc:'상대 깃발을 5번 가져오기',team:true,time:360,goal:5},
+ br:{id:'br',name:'배틀로얄',desc:'목숨 1개, 마지막 1명',team:false,time:360},
 };
 const MODE_IDS=Object.keys(MODES);
 const TEAM_NAMES=['레드','블루'],TEAM_COLORS=['#ff5a5a','#4aa3ff'];
@@ -39,7 +39,7 @@ const SKILLS=[
  {id:'fire',name:'불화살',ic:'🔥',ds:'맞은 적이 3초간 불탐',max:2,ap:e=>e.fire++},
  {id:'shield',name:'갑옷',ic:'🛡️',ds:'받는 피해 -12%',max:3,ap:e=>e.armor*=0.88},
  {id:'bounce',name:'튕기는 화살',ic:'🪃',ds:'벽에 맞으면 1번 더 튕김',max:2,ap:e=>e.bounce++},
- {id:'homing',name:'유도 화살',ic:'🌀',ds:'화살이 가까운 적 쪽으로 휨',max:2,ap:e=>e.homing++},
+ {id:'homing',name:'유도 화살',ic:'🌀',ds:'화살이 앞쪽 가까운 적에게 살짝 휨',max:2,ap:e=>e.homing++},
  {id:'ice',name:'얼음 화살',ic:'❄️',ds:'맞은 적이 1.5초 느려짐',max:2,ap:e=>e.ice++},
  {id:'boom',name:'폭발 화살',ic:'💣',ds:'맞으면 주변에 폭발 피해',max:2,ap:e=>e.boom++},
  {id:'split',name:'분열 화살',ic:'🔱',ds:'적에게 맞으면 갈라져 날아감',max:2,ap:e=>e.split++},
@@ -48,9 +48,10 @@ const SKILLS=[
  {id:'magnet',name:'자석',ic:'🧲',ds:'보석 끌어오는 범위 +60%',max:2,ap:e=>e.magnet++},
  {id:'regen',name:'재생',ic:'🌿',ds:'체력이 계속 조금씩 회복',max:3,ap:e=>e.regen++},
  {id:'guard',name:'보호막',ic:'🔰',ds:'8초마다 공격 1번을 막음',max:1,ap:e=>{e.guard++;e.guardUp=true}},
+ {id:'fart',name:'방구',ic:'💨',ds:'5초마다 뿡! 주변 적에게 피해 (레벨업하면 범위↑)',max:3,ap:e=>e.fart++},
 ];
 const SKILL_BY={};for(const s of SKILLS)SKILL_BY[s.id]=s;
-const BOT_PREF=['multi','atk','aspd','blade','diag','hp','pierce','boom','crit','homing','split','side','ice','back','leech','feast','regen','guard','range','spd','fire','bounce','shield','magnet'];
+const BOT_PREF=['multi','atk','aspd','blade','diag','hp','pierce','boom','crit','homing','split','side','ice','back','leech','feast','fart','regen','guard','range','spd','fire','bounce','shield','magnet'];
 const FURN={crate:{w:10,h:12,high:true},barrel:{w:9,h:11,high:true},table:{w:18,h:12,high:false},bed:{w:13,h:22,high:false},shelf:{w:20,h:9,high:true}};
 const STORM_R=[820,560,380,240,130,60,14];
 function xpNeed(l){return 40+l*30}
@@ -66,7 +67,7 @@ function shotDirs(e,a){
 }
 function resetStats(e){
  Object.assign(e,{maxHp:100,hp:100,dmg:20,fireCd:.6,speed:68,multi:1,diag:0,back:0,side:0,pierce:0,leech:0,crit:0,range:140,aspeed:230,fire:0,armor:1,
-  bounce:0,homing:0,ice:0,boom:0,split:0,feast:0,blade:0,magnet:0,regen:0,guard:0,guardUp:false,guardT:0,slow:0,carry:false});
+  bounce:0,homing:0,ice:0,boom:0,split:0,feast:0,blade:0,magnet:0,regen:0,guard:0,guardUp:false,guardT:0,fart:0,fartT:0,slow:0,carry:false});
  e.skills={};e.level=1;e.xp=0;e.r=6;e.pending=0;e.opts=null;e.burn=0;e.aiming=false;e.queued=null;e.drawT=0;e.bladeCd={};
 }
 function angDiff(a,b){let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
@@ -402,7 +403,7 @@ class World{
   }
   if(m==='br'){
    const s=this.storm;s.t+=dt;
-   const PH=30,HOLD=12;
+   const PH=50,HOLD=22;
    if(s.phase<STORM_R.length-1){
     if(!s.shrinking&&s.t>=HOLD){
      s.shrinking=true;s.ox=s.x;s.oy=s.y;s.or=s.r;
@@ -468,6 +469,15 @@ class World{
    if(e.sinceHit>4)e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.025*dt);
    if(e.regen)e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.015*e.regen*dt);
    if(e.burn>0){e.burn-=dt;this.damage(e,e.burnDps*dt,e.burnSrc,true);if(!e.alive)continue}
+   if(e.fart){
+    e.fartT+=dt;
+    if(e.fartT>=5){
+     e.fartT=0;const r=[0,26,36,48][Math.min(3,e.fart)];
+     this.emit({k:'fart',i:e.id,x:Math.round(e.x),y:Math.round(e.y+3),r});
+     for(const o of this.ents)if(o.alive&&this.isEnemy(e,o)&&o.inv<=0&&(o.x-e.x)**2+(o.y-e.y)**2<r*r)this.damage(o,e.dmg*.6,e,false,o.x,o.y);
+     if(!e.alive)continue;
+    }
+   }
    if(e.blade){
     for(let i=0;i<e.blade;i++){
      const a=this.matchT*4+i*Math.PI*2/e.blade,bx=e.x+Math.cos(a)*15,by=e.y-1+Math.sin(a)*15;
@@ -491,9 +501,9 @@ class World{
   for(let i=this.arrows.length-1;i>=0;i--){
    const a=this.arrows[i],px=a.x,py=a.y;
    if(a.homing){
-    let best=null,bd=80*80;
-    for(const e of this.ents){if(!e.alive||!a.owner||!this.isEnemy(a.owner,e)||a.hit.has(e))continue;const dx=e.x-a.x,dy=e.y-1-a.y,d=dx*dx+dy*dy;if(d<bd&&(dx*a.vx+dy*a.vy)>0){bd=d;best=e}}
-    if(best){const want=Math.atan2(best.y-1-a.y,best.x-a.x),df=angDiff(a.ang,want),mx=a.homing*2.6*dt;a.ang+=Math.max(-mx,Math.min(mx,df));a.vx=Math.cos(a.ang)*a.sp;a.vy=Math.sin(a.ang)*a.sp}
+    let best=null,bd=55*55;
+    for(const e of this.ents){if(!e.alive||!a.owner||!this.isEnemy(a.owner,e)||a.hit.has(e))continue;const dx=e.x-a.x,dy=e.y-1-a.y,d=dx*dx+dy*dy;if(d<bd&&(dx*a.vx+dy*a.vy)>.6*Math.sqrt(d)*a.sp){bd=d;best=e}}
+    if(best){const want=Math.atan2(best.y-1-a.y,best.x-a.x),df=angDiff(a.ang,want),mx=a.homing*1.2*dt;a.ang+=Math.max(-mx,Math.min(mx,df));a.vx=Math.cos(a.ang)*a.sp;a.vy=Math.sin(a.ang)*a.sp}
    }
    a.x+=a.vx*dt;a.y+=a.vy*dt;a.life-=dt;
    let dead=a.life<=0||a.x<0||a.y<0||a.x>WORLD||a.y>WORLD;
